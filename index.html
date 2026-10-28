@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glasshouse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: full-bleed 3D stage; flat instrument panels sit on its edges (header TL, status TR, mix BL, ledger R). */
+:root {
+  --bg: #0e1117;      /* graphite, blue-biased */
+  --panel: #141922;
+  --line: #262d39;
+  --ink: #e7eaf0;
+  --muted: #8892a3;
+  --steel: #6f93b8;   /* sealed (encrypted) */
+  --amber: #f2b441;   /* exposed (plaintext) */
+  --rose: #ff4d79;    /* credential caught */
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --body: "Instrument Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--body); overflow: hidden; }
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.ui { position: fixed; inset: 0; pointer-events: none; display: grid; gap: 16px; padding: 20px max(16px, 20px);
+  grid-template-columns: 1fr minmax(300px, 360px); grid-template-rows: auto 1fr auto; }
+.ui > * { pointer-events: auto; min-width: 0; }
+
+.brand h1 { font: 700 34px/1 var(--display); letter-spacing: -0.02em; margin: 0 0 6px; }
+.brand p { margin: 0; color: var(--muted); max-width: 30ch; }
+.status { grid-column: 2; grid-row: 1; display: flex; gap: 8px; justify-content: flex-end; align-items: flex-start; flex-wrap: wrap; }
+.pill, button { font: 500 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); padding: 9px 12px; }
+.pill i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); margin-right: 8px; }
+.pill.live i { background: var(--rose); }
+button { cursor: pointer; } button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+button[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); }
+
+.mix { grid-column: 1; grid-row: 3; align-self: end; background: var(--panel); border: 1px solid var(--line); padding: 16px; max-width: 560px; }
+.exposed { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.exposed b { font: 700 54px/1 var(--display); letter-spacing: -0.03em; color: var(--amber); font-variant-numeric: tabular-nums; }
+.exposed span { color: var(--muted); }
+.bar { display: flex; gap: 2px; height: 10px; background: var(--line); }
+.bar div { height: 100%; transition: flex-grow .4s; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 0; padding: 0; list-style: none; font: 12px var(--mono); color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 7px; }
+.legend i { width: 9px; height: 9px; display: inline-block; }
+.legend b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.ledger { grid-column: 2; grid-row: 2 / 4; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.ledger header { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.ledger h2 { margin: 0; font: 700 16px var(--display); }
+.ledger header span { font: 12px var(--mono); color: var(--rose); font-variant-numeric: tabular-nums; }
+#feed { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+#feed li { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+#feed .meta { display: flex; gap: 10px; align-items: center; font: 12px var(--mono); color: var(--muted); }
+#feed .tag { color: var(--bg); background: var(--amber); padding: 2px 6px; font-weight: 500; }
+#feed code { font: 500 13px var(--mono); color: var(--rose); overflow-wrap: anywhere; }
+.empty { padding: 16px; color: var(--muted); }
+.note { padding: 10px 16px; font: 12px var(--mono); color: var(--amber); border-top: 1px solid var(--line); }
+
+.tip { position: fixed; z-index: 2; pointer-events: none; font: 500 12px var(--mono); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--rose); padding: 6px 9px; white-space: nowrap; transform: translate(-50%, -140%); }
+
+@media (max-width: 760px) {
+  body { overflow: auto; }
+  .ui { position: relative; min-height: 100%; grid-template-columns: 1fr; grid-template-rows: auto auto auto 60vh; }
+  .status, .mix, .ledger { grid-column: 1; grid-row: auto; justify-content: flex-start; }
+  .mix { align-self: start; margin-top: 38vh; }
+  .ledger { min-height: 320px; }
+}
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="3D view of packets passing through a checkpoint: sealed steel cubes are encrypted, amber glass cubes are plaintext, rose cubes carry a captured credential"></canvas>
+
+<div class="ui">
+  <div class="brand">
+    <h1>Glasshouse</h1>
+    <p>Encrypted packets pass sealed. Plaintext ones are made of glass.</p>
+  </div>
+  <div class="status">
+    <span class="pill" id="mode"><i></i><span>Connecting</span></span>
+    <button id="mask" aria-pressed="false" title="Hide captured secrets">Mask secrets</button>
+  </div>
+
+  <section class="mix" aria-label="Traffic mix">
+    <div class="exposed"><b id="pct">0%</b><span>of packets are readable by anyone on the path</span></div>
+    <div class="bar" id="bar" role="img" aria-label="Share of packets by protocol"></div>
+    <ul class="legend" id="legend"></ul>
+  </section>
+
+  <aside class="ledger">
+    <header><h2>Caught in plaintext</h2><span id="count">0 found</span></header>
+    <ul id="feed"><li class="empty">Nothing yet. Log in to an HTTP site, or an FTP server, on this network and the credential lands here.</li></ul>
+    <div class="note" id="note" hidden></div>
+  </aside>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const $ = id => document.getElementById(id);
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const PLAIN = ["HTTP", "FTP", "Telnet", "SMTP", "POP3", "IMAP"];
+const ORDER = ["HTTPS", ...PLAIN, "Other"];
+const AMBER_STEPS = { HTTP: 1, FTP: .8, Telnet: .66, SMTP: .54, POP3: .44, IMAP: .36 };
+const LANE = { HTTPS: 1.9, HTTP: .6, FTP: -.7 };  // everything else shares the lowest lane
+const laneY = p => LANE[p] ?? -1.9;
+let masked = false;
+
+/* ---------- 3D stage ---------- */
+let scene, camera, renderer, packets = [], mouse = { x: 0, y: 0 }, gateLight, held = [];
+function initScene() {
+  if (!window.THREE) { $("stage").hidden = true; return; }
+  const bg = new THREE.Color(css("--bg"));
+  scene = new THREE.Scene(); scene.background = bg; scene.fog = new THREE.Fog(bg, 14, 30);
+  camera = new THREE.PerspectiveCamera(42, 1, .1, 60); camera.position.set(0, 1.4, 14);
+  renderer = new THREE.WebGLRenderer({ canvas: $("stage"), antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x1a2230, .9));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(5, 8, 7); scene.add(sun);
+  gateLight = new THREE.PointLight(css("--rose"), 0, 12); scene.add(gateLight);
+
+  // lanes + the checkpoint frame every packet crosses
+  const lineMat = new THREE.LineBasicMaterial({ color: css("--line") });
+  [1.9, .6, -.7, -1.9].forEach(y => scene.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-16, y, 0), new THREE.Vector3(16, y, 0)]), lineMat)));
+  const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.4, 6, 4.2)),
+    new THREE.LineBasicMaterial({ color: css("--muted") }));
+  scene.add(frame);
+
+  addEventListener("pointermove", e => { mouse.x = e.clientX / innerWidth - .5; mouse.y = e.clientY / innerHeight - .5; });
+  addEventListener("resize", resize); resize(); requestAnimationFrame(tick);
+}
+function resize() {
+  if (!renderer) return;
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  // keep the whole lane visible on narrow screens
+  camera.position.z = Math.max(14, 14 * (1.3 / camera.aspect)); camera.updateProjectionMatrix();
+}
+
+const box = new THREE.BoxGeometry(1, 1, 1), edges = new THREE.EdgesGeometry(box);
+function make(ev) {
+  const secret = ev.found.length > 0, plain = PLAIN.includes(ev.proto), g = new THREE.Group();
+  if (!plain) {
+    const c = ev.proto === "HTTPS" ? css("--steel") : css("--muted");
+    g.add(new THREE.Mesh(box, new THREE.MeshStandardMaterial({ color: c, metalness: .55, roughness: .38 })));
+    g.scale.setScalar(.55);
+  } else {
+    const c = secret ? css("--rose") : css("--amber");
+    g.add(new THREE.Mesh(box, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .14 })));
+    g.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: c })));
+    const core = new THREE.Mesh(box, new THREE.MeshBasicMaterial({ color: c })); core.scale.setScalar(secret ? .42 : .2); g.add(core);
+    g.scale.setScalar(secret ? .85 : .55);
+  }
+  g.position.set(-15 - Math.random() * 3, laneY(ev.proto) + (Math.random() - .5) * .25, (Math.random() - .5) * 1.4);
+  g.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+  scene.add(g);
+  packets.push({ g, v: (2.6 + Math.random() * 1.6) * (reduce ? .5 : 1), spin: .4 + Math.random() * .6, secret, text: ev.found.join("  "), hold: 0, tip: null });
+}
+function maskText(t) { return t.replace(/=([^&\s]+)/g, (_, v) => "=" + v.slice(0, 1) + "•".repeat(Math.max(v.length - 1, 3))); }
+
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min((now - last) / 1000, .1); last = now;
+  for (let i = packets.length - 1; i >= 0; i--) {
+    const p = packets[i];
+    if (p.secret && p.hold > 0) {                       // caught: hover inside the frame, scaled up and glowing
+      p.hold -= dt; p.g.rotation.y += dt * 1.2; gateLight.intensity = 3 + Math.sin(now / 120);
+      if (p.hold <= 0) { p.tip.remove(); p.tip = null; gateLight.intensity = 0; }
+    } else {
+      const wasLeft = p.g.position.x < 0;
+      p.g.position.x += p.v * dt; p.g.rotation.x += dt * p.spin; p.g.rotation.y += dt * p.spin * .7;
+      if (p.secret && wasLeft && p.g.position.x >= 0 && !p.done) {
+        p.done = true; p.hold = 3.6; p.g.position.x = 0; p.tip = document.createElement("div");
+        p.tip.className = "tip"; document.body.appendChild(p.tip);
+      }
+    }
+    if (p.tip) {
+      const v = p.g.position.clone().project(camera);
+      p.tip.style.left = (v.x * .5 + .5) * innerWidth + "px"; p.tip.style.top = (-v.y * .5 + .5) * innerHeight + "px";
+      p.tip.textContent = masked ? maskText(p.text) : p.text;
+    }
+    if (p.g.position.x > 16) { scene.remove(p.g); p.g.traverse(o => o.material && o.material.dispose()); packets.splice(i, 1); }
+  }
+  if (!reduce) { scene.rotation.y = Math.sin(now / 6000) * .12; }
+  camera.position.x += (mouse.x * 2.4 - camera.position.x) * .04;
+  camera.position.y += (1.4 - mouse.y * 1.6 - camera.position.y) * .04;
+  camera.lookAt(0, 0, 0);
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+/* ---------- data ---------- */
+let since = 0, found = [];
+function colorFor(p) {
+  if (p === "HTTPS") return css("--steel");
+  if (p === "Other") return css("--muted");
+  const c = new THREE.Color(css("--amber")); return "#" + c.multiplyScalar(AMBER_STEPS[p] ?? .5).getHexString();
+}
+function renderMix(stats) {
+  const total = Object.values(stats).reduce((a, b) => a + b, 0) || 1;
+  const names = ORDER.filter(n => stats[n]);
+  $("bar").innerHTML = names.map(n => `<div style="flex-grow:${stats[n]};background:${colorFor(n)}" title="${n}"></div>`).join("");
+  $("legend").innerHTML = names.map(n => `<li><i style="background:${colorFor(n)}"></i>${n} <b>${stats[n]}</b></li>`).join("");
+  $("pct").textContent = Math.round(PLAIN.reduce((a, n) => a + (stats[n] || 0), 0) / total * 100) + "%";
+}
+function renderFeed() {
+  $("count").textContent = found.length + " found";
+  $("feed").innerHTML = found.slice(0, 40).map(e => `<li><div class="meta"><span class="tag">${e.proto}</span>${e.t}
+    <span>${e.src} → ${e.dst}:${e.port}</span></div>${e.found.map(f => `<code>${esc(masked ? maskText(f) : f)}</code>`).join("")}</li>`).join("")
+    || '<li class="empty">Nothing yet.</li>';
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function poll() {
+  try {
+    const d = await (await fetch("/api/state?since=" + since)).json();
+    const first = since === 0;
+    d.events.forEach(e => { since = Math.max(since, e.id); if (e.found.length) found.unshift(e); });
+    // first load replays history into the ledger only; the stage gets the last few packets
+    if (scene) d.events.slice(first ? -10 : -25).forEach(e => { if (packets.length < 120) make(e); });
+    $("mode").className = "pill " + d.mode;
+    $("mode").lastChild.textContent = d.mode === "live" ? "Live · " + d.iface : "Demo traffic";
+    $("note").hidden = !d.error; $("note").textContent = d.error;
+    renderMix(d.stats); renderFeed();
+  } catch (e) { $("mode").lastChild.textContent = "Server offline"; }
+  setTimeout(poll, 450);
+}
+$("mask").onclick = () => { masked = !masked; $("mask").setAttribute("aria-pressed", masked); renderFeed(); };
+
+initScene(); poll();
+</script>
+</body>
+</html>
